@@ -36,8 +36,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const data = await response.json();
-    const text = data?.content?.markdown || data?.content?.text;
-    if (!text) throw new Error('Upstage가 문서 내용을 추출하지 못했습니다.');
+    const text = data?.content?.markdown || data?.content?.text || data?.content?.html;
+    if (!text) {
+      throw new Error(`Upstage가 문서 내용을 추출하지 못했습니다. (응답 키: ${JSON.stringify(Object.keys(data || {}))}, content 키: ${JSON.stringify(Object.keys(data?.content || {}))})`);
+    }
 
     return res.json({ text });
   } catch (err: any) {
