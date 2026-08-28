@@ -353,7 +353,7 @@
   }) {
     const isTodoOnly = detail.registerType === 'todo_only';
     const eventId = isTodoOnly ? undefined : `evt-${Date.now()}`;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
 
     // 1. 이벤트 등록 (캘린더 & D-Day: deadline_event 모드일 때만 등록)
     if (!isTodoOnly) {
@@ -414,7 +414,7 @@
 
   // 다중 일정 일괄 등록 핸들러
   function handleConfirmMulti(selectedItems: MultiParsedItem[]) {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const newEvents: ScheduleEvent[] = selectedItems.map((item, idx) => ({
       id: `evt-${Date.now()}-${idx}`,
       title: item.title,
@@ -480,7 +480,7 @@
   }
 
   function handleAddCustomTodo(title: string, tag?: TodoItem['tag']) {
-    const todayStr = selectedDate.toISOString().split('T')[0];
+    const todayStr = format(selectedDate, 'yyyy-MM-dd');
     const newTodo: TodoItem = {
       id: `todo-${Date.now()}`,
       title,

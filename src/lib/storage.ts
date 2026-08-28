@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import type {
   ScheduleEvent,
   TodoItem,
@@ -283,7 +284,7 @@ export const Storage = {
       content,
       type,
       isDone: false,
-      date: new Date().toISOString().split('T')[0],
+      date: format(new Date(), 'yyyy-MM-dd'),
     };
     const updated = [newItem, ...list];
     safeSet(KEYS.BRIEFINGS, updated);

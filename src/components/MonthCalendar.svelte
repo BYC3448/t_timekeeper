@@ -26,9 +26,14 @@
   }>();
 
   let currentMonth: Date = selectedDate;
+  let prevSelectedDate: Date = selectedDate;
 
-  $: {
-    if (selectedDate && !isSameMonth(currentMonth, selectedDate)) {
+  // selectedDate가 외부(다른 컴포넌트)에서 바뀐 경우에만 currentMonth를 동기화한다.
+  // currentMonth 자체의 변화(다음/이전 달 버튼)로 이 블록이 다시 실행되어도,
+  // prevSelectedDate 가드 덕분에 방금 바꾼 달을 되돌리지 않는다.
+  $: if (selectedDate && selectedDate !== prevSelectedDate) {
+    prevSelectedDate = selectedDate;
+    if (!isSameMonth(currentMonth, selectedDate)) {
       currentMonth = selectedDate;
     }
   }
