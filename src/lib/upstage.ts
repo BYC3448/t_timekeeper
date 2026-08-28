@@ -3,7 +3,6 @@
  * API 키는 서버에만 보관되어 브라우저에 노출되지 않습니다.
  */
 export async function parseDocumentWithUpstage(params: {
-  apiKey?: string; // 하위 호환용, 서버 모드에서는 사용되지 않음
   fileBase64: string; // data URL (base64)
   fileName: string;
 }): Promise<string> {

@@ -41,8 +41,6 @@ const KEYS = {
 };
 
 export interface AppSettings {
-  geminiApiKey?: string;
-  upstageApiKey?: string;
   autoMaskPersonalInfo: boolean;
   schoolName: string;
   teacherName: string;

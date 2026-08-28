@@ -80,65 +80,137 @@ export function getFirestoreInstance(): Firestore | null {
 }
 
 /* =========================================================================
+   공통 컬렉션 CRUD 헬퍼
+   (teachers/{userId}/{collectionName} 문서 컬렉션 + teachers/{userId}/data/{collectionName}
+   레거시 단일 문서로의 자동 fallback을 모든 엔티티가 동일하게 필요로 하므로 공통화)
+   ========================================================================= */
+
+async function fetchCollectionWithFallback<T>(
+  userId: string,
+  collectionName: string,
+  label: string
+): Promise<T[]> {
+  if (!db) return [];
+  try {
+    const snap = await getDocs(collection(db, 'teachers', userId, collectionName));
+    if (!snap.empty) return snap.docs.map((d) => d.data() as T);
+    const legacyDoc = await getDoc(doc(db, 'teachers', userId, 'data', collectionName));
+    if (legacyDoc.exists() && legacyDoc.data()?.items) return legacyDoc.data().items as T[];
+    return [];
+  } catch (e) {
+    console.error(`[Firebase] fetch${label} 오류:`, e);
+    return [];
+  }
+}
+
+async function setDocMerge(
+  userId: string,
+  collectionName: string,
+  id: string,
+  data: object,
+  label: string
+): Promise<void> {
+  if (!db) return;
+  try {
+    const docRef = doc(db, 'teachers', userId, collectionName, id);
+    await setDoc(docRef, { ...data, updatedAt: new Date().toISOString() }, { merge: true });
+  } catch (e) {
+    console.error(`[Firebase] ${label} 오류:`, e);
+  }
+}
+
+async function deleteFromCollection(
+  userId: string,
+  collectionName: string,
+  id: string,
+  label: string
+): Promise<void> {
+  if (!db) return;
+  try {
+    await deleteDoc(doc(db, 'teachers', userId, collectionName, id));
+  } catch (e) {
+    console.error(`[Firebase] ${label} 오류:`, e);
+  }
+}
+
+async function batchSetCollection<T extends { id: string }>(
+  userId: string,
+  collectionName: string,
+  items: T[],
+  label: string
+): Promise<void> {
+  if (!db || !Array.isArray(items)) return;
+  try {
+    const batch = writeBatch(db);
+    items.forEach((item) => {
+      const docRef = doc(db!, 'teachers', userId, collectionName, item.id);
+      batch.set(docRef, { ...item, updatedAt: new Date().toISOString() }, { merge: true });
+    });
+    await batch.commit();
+  } catch (e) {
+    console.error(`[Firebase] ${label} 오류:`, e);
+  }
+}
+
+async function syncAllToCollection<T extends { id: string }>(
+  userId: string,
+  collectionName: string,
+  items: T[],
+  label: string
+): Promise<void> {
+  if (!db || !Array.isArray(items)) return;
+  try {
+    const batch = writeBatch(db);
+    items.forEach((item) => {
+      const docRef = doc(db!, 'teachers', userId, collectionName, item.id);
+      batch.set(docRef, { ...item, updatedAt: new Date().toISOString() }, { merge: true });
+    });
+    // 레거시 단일 문서 백업도 함께 동기화
+    const legacyDoc = doc(db, 'teachers', userId, 'data', collectionName);
+    batch.set(legacyDoc, { items, updatedAt: new Date().toISOString() });
+    await batch.commit();
+  } catch (e) {
+    console.error(`[Firebase] ${label} 오류:`, e);
+  }
+}
+
+function subscribeCollectionWithFallback<T>(
+  userId: string,
+  collectionName: string,
+  cb: (items: T[]) => void
+): Unsubscribe {
+  return onSnapshot(collection(db!, 'teachers', userId, collectionName), (snap) => {
+    if (!snap.empty) {
+      cb(snap.docs.map((d) => d.data() as T));
+    } else {
+      // 컬렉션이 비었으면 레거시 단일 문서 확인
+      getDoc(doc(db!, 'teachers', userId, 'data', collectionName)).then((legacySnap) => {
+        if (legacySnap.exists() && legacySnap.data()?.items) {
+          cb(legacySnap.data().items);
+        }
+      });
+    }
+  });
+}
+
+/* =========================================================================
    1. 학사일정 및 마감 이벤트 (Events)
    ========================================================================= */
 
 export async function fetchEventsFromFirestore(userId = 'default_teacher'): Promise<ScheduleEvent[]> {
-  if (!db) return [];
-  try {
-    const colRef = collection(db, 'teachers', userId, 'events');
-    const snap = await getDocs(colRef);
-    if (!snap.empty) {
-      return snap.docs.map((d) => d.data() as ScheduleEvent);
-    }
-    // 레거시 단일 문서 포맷 fallback 확인
-    const legacyDoc = await getDoc(doc(db, 'teachers', userId, 'data', 'events'));
-    if (legacyDoc.exists() && legacyDoc.data()?.items) {
-      return legacyDoc.data().items as ScheduleEvent[];
-    }
-    return [];
-  } catch (e) {
-    console.error('[Firebase] fetchEvents 오류:', e);
-    return [];
-  }
+  return fetchCollectionWithFallback<ScheduleEvent>(userId, 'events', 'Events');
 }
 
 export async function addEventToFirestore(event: ScheduleEvent, userId = 'default_teacher'): Promise<void> {
-  if (!db) return;
-  try {
-    const docRef = doc(db, 'teachers', userId, 'events', event.id);
-    await setDoc(docRef, { ...event, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (e) {
-    console.error('[Firebase] addEvent 오류:', e);
-  }
+  return setDocMerge(userId, 'events', event.id, event, 'addEvent');
 }
 
 export async function deleteEventFromFirestore(id: string, userId = 'default_teacher'): Promise<void> {
-  if (!db) return;
-  try {
-    const docRef = doc(db, 'teachers', userId, 'events', id);
-    await deleteDoc(docRef);
-  } catch (e) {
-    console.error('[Firebase] deleteEvent 오류:', e);
-  }
+  return deleteFromCollection(userId, 'events', id, 'deleteEvent');
 }
 
 export async function syncAllEventsToFirestore(events: ScheduleEvent[], userId = 'default_teacher'): Promise<void> {
-  if (!db || !Array.isArray(events)) return;
-  try {
-    const batch = writeBatch(db);
-    // 컬렉션 문서 일괄 업데이트
-    events.forEach((evt) => {
-      const docRef = doc(db!, 'teachers', userId, 'events', evt.id);
-      batch.set(docRef, { ...evt, updatedAt: new Date().toISOString() }, { merge: true });
-    });
-    // 레거시 백업 문서도 동기화
-    const legacyDoc = doc(db, 'teachers', userId, 'data', 'events');
-    batch.set(legacyDoc, { items: events, updatedAt: new Date().toISOString() });
-    await batch.commit();
-  } catch (e) {
-    console.error('[Firebase] syncAllEvents 오류:', e);
-  }
+  return syncAllToCollection(userId, 'events', events, 'syncAllEvents');
 }
 
 /* =========================================================================
@@ -146,72 +218,23 @@ export async function syncAllEventsToFirestore(events: ScheduleEvent[], userId =
    ========================================================================= */
 
 export async function fetchTodosFromFirestore(userId = 'default_teacher'): Promise<TodoItem[]> {
-  if (!db) return [];
-  try {
-    const colRef = collection(db, 'teachers', userId, 'todos');
-    const snap = await getDocs(colRef);
-    if (!snap.empty) {
-      return snap.docs.map((d) => d.data() as TodoItem);
-    }
-    const legacyDoc = await getDoc(doc(db, 'teachers', userId, 'data', 'todos'));
-    if (legacyDoc.exists() && legacyDoc.data()?.items) {
-      return legacyDoc.data().items as TodoItem[];
-    }
-    return [];
-  } catch (e) {
-    console.error('[Firebase] fetchTodos 오류:', e);
-    return [];
-  }
+  return fetchCollectionWithFallback<TodoItem>(userId, 'todos', 'Todos');
 }
 
 export async function addTodosToFirestore(todos: TodoItem[], userId = 'default_teacher'): Promise<void> {
-  if (!db || !Array.isArray(todos)) return;
-  try {
-    const batch = writeBatch(db);
-    todos.forEach((todo) => {
-      const docRef = doc(db!, 'teachers', userId, 'todos', todo.id);
-      batch.set(docRef, { ...todo, updatedAt: new Date().toISOString() }, { merge: true });
-    });
-    await batch.commit();
-  } catch (e) {
-    console.error('[Firebase] addTodos 오류:', e);
-  }
+  return batchSetCollection(userId, 'todos', todos, 'addTodos');
 }
 
 export async function toggleTodoInFirestore(id: string, isCompleted: boolean, userId = 'default_teacher'): Promise<void> {
-  if (!db) return;
-  try {
-    const docRef = doc(db, 'teachers', userId, 'todos', id);
-    await setDoc(docRef, { isCompleted, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (e) {
-    console.error('[Firebase] toggleTodo 오류:', e);
-  }
+  return setDocMerge(userId, 'todos', id, { isCompleted }, 'toggleTodo');
 }
 
 export async function deleteTodoFromFirestore(id: string, userId = 'default_teacher'): Promise<void> {
-  if (!db) return;
-  try {
-    const docRef = doc(db, 'teachers', userId, 'todos', id);
-    await deleteDoc(docRef);
-  } catch (e) {
-    console.error('[Firebase] deleteTodo 오류:', e);
-  }
+  return deleteFromCollection(userId, 'todos', id, 'deleteTodo');
 }
 
 export async function syncAllTodosToFirestore(todos: TodoItem[], userId = 'default_teacher'): Promise<void> {
-  if (!db || !Array.isArray(todos)) return;
-  try {
-    const batch = writeBatch(db);
-    todos.forEach((todo) => {
-      const docRef = doc(db!, 'teachers', userId, 'todos', todo.id);
-      batch.set(docRef, { ...todo, updatedAt: new Date().toISOString() }, { merge: true });
-    });
-    const legacyDoc = doc(db, 'teachers', userId, 'data', 'todos');
-    batch.set(legacyDoc, { items: todos, updatedAt: new Date().toISOString() });
-    await batch.commit();
-  } catch (e) {
-    console.error('[Firebase] syncAllTodos 오류:', e);
-  }
+  return syncAllToCollection(userId, 'todos', todos, 'syncAllTodos');
 }
 
 /* =========================================================================
@@ -255,68 +278,23 @@ export async function saveTimetableToFirestore(timetable: WeeklyTimetable, userI
    ========================================================================= */
 
 export async function fetchBriefingsFromFirestore(userId = 'default_teacher'): Promise<MorningBriefingItem[]> {
-  if (!db) return [];
-  try {
-    const colRef = collection(db, 'teachers', userId, 'briefings');
-    const snap = await getDocs(colRef);
-    if (!snap.empty) {
-      return snap.docs.map((d) => d.data() as MorningBriefingItem);
-    }
-    const legacyDoc = await getDoc(doc(db, 'teachers', userId, 'data', 'briefings'));
-    if (legacyDoc.exists() && legacyDoc.data()?.items) {
-      return legacyDoc.data().items as MorningBriefingItem[];
-    }
-    return [];
-  } catch (e) {
-    console.error('[Firebase] fetchBriefings 오류:', e);
-    return [];
-  }
+  return fetchCollectionWithFallback<MorningBriefingItem>(userId, 'briefings', 'Briefings');
 }
 
 export async function addBriefingToFirestore(briefing: MorningBriefingItem, userId = 'default_teacher'): Promise<void> {
-  if (!db) return;
-  try {
-    const docRef = doc(db, 'teachers', userId, 'briefings', briefing.id);
-    await setDoc(docRef, { ...briefing, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (e) {
-    console.error('[Firebase] addBriefing 오류:', e);
-  }
+  return setDocMerge(userId, 'briefings', briefing.id, briefing, 'addBriefing');
 }
 
 export async function toggleBriefingInFirestore(id: string, isDone: boolean, userId = 'default_teacher'): Promise<void> {
-  if (!db) return;
-  try {
-    const docRef = doc(db, 'teachers', userId, 'briefings', id);
-    await setDoc(docRef, { isDone, updatedAt: new Date().toISOString() }, { merge: true });
-  } catch (e) {
-    console.error('[Firebase] toggleBriefing 오류:', e);
-  }
+  return setDocMerge(userId, 'briefings', id, { isDone }, 'toggleBriefing');
 }
 
 export async function deleteBriefingFromFirestore(id: string, userId = 'default_teacher'): Promise<void> {
-  if (!db) return;
-  try {
-    const docRef = doc(db, 'teachers', userId, 'briefings', id);
-    await deleteDoc(docRef);
-  } catch (e) {
-    console.error('[Firebase] deleteBriefing 오류:', e);
-  }
+  return deleteFromCollection(userId, 'briefings', id, 'deleteBriefing');
 }
 
 export async function syncAllBriefingsToFirestore(briefings: MorningBriefingItem[], userId = 'default_teacher'): Promise<void> {
-  if (!db || !Array.isArray(briefings)) return;
-  try {
-    const batch = writeBatch(db);
-    briefings.forEach((b) => {
-      const docRef = doc(db!, 'teachers', userId, 'briefings', b.id);
-      batch.set(docRef, { ...b, updatedAt: new Date().toISOString() }, { merge: true });
-    });
-    const legacyDoc = doc(db, 'teachers', userId, 'data', 'briefings');
-    batch.set(legacyDoc, { items: briefings, updatedAt: new Date().toISOString() });
-    await batch.commit();
-  } catch (e) {
-    console.error('[Firebase] syncAllBriefings 오류:', e);
-  }
+  return syncAllToCollection(userId, 'briefings', briefings, 'syncAllBriefings');
 }
 
 /* =========================================================================
@@ -369,40 +347,14 @@ export function subscribeToTeacherData(
   if (!db) return () => {};
 
   try {
-    // Events 실시간 리스너 (컬렉션 우선, 레거시 폴백)
     if (callbacks.onEvents) {
-      const unsub = onSnapshot(collection(db, 'teachers', userId, 'events'), (snap) => {
-        if (!snap.empty) {
-          callbacks.onEvents?.(snap.docs.map((d) => d.data() as ScheduleEvent));
-        } else {
-          // 컬렉션이 비었으면 단일 문서 확인
-          getDoc(doc(db!, 'teachers', userId, 'data', 'events')).then((legacySnap) => {
-            if (legacySnap.exists() && legacySnap.data()?.items) {
-              callbacks.onEvents?.(legacySnap.data().items);
-            }
-          });
-        }
-      });
-      activeUnsubscribes.push(unsub);
+      activeUnsubscribes.push(subscribeCollectionWithFallback(userId, 'events', callbacks.onEvents));
     }
 
-    // Todos 실시간 리스너
     if (callbacks.onTodos) {
-      const unsub = onSnapshot(collection(db, 'teachers', userId, 'todos'), (snap) => {
-        if (!snap.empty) {
-          callbacks.onTodos?.(snap.docs.map((d) => d.data() as TodoItem));
-        } else {
-          getDoc(doc(db!, 'teachers', userId, 'data', 'todos')).then((legacySnap) => {
-            if (legacySnap.exists() && legacySnap.data()?.items) {
-              callbacks.onTodos?.(legacySnap.data().items);
-            }
-          });
-        }
-      });
-      activeUnsubscribes.push(unsub);
+      activeUnsubscribes.push(subscribeCollectionWithFallback(userId, 'todos', callbacks.onTodos));
     }
 
-    // Timetable 실시간 리스너
     if (callbacks.onTimetable) {
       const unsub = onSnapshot(doc(db, 'teachers', userId, 'timetable', 'weekly'), (snap) => {
         if (snap.exists() && snap.data()?.data) {
@@ -418,23 +370,10 @@ export function subscribeToTeacherData(
       activeUnsubscribes.push(unsub);
     }
 
-    // Briefings 실시간 리스너
     if (callbacks.onBriefings) {
-      const unsub = onSnapshot(collection(db, 'teachers', userId, 'briefings'), (snap) => {
-        if (!snap.empty) {
-          callbacks.onBriefings?.(snap.docs.map((d) => d.data() as MorningBriefingItem));
-        } else {
-          getDoc(doc(db!, 'teachers', userId, 'data', 'briefings')).then((legacySnap) => {
-            if (legacySnap.exists() && legacySnap.data()?.items) {
-              callbacks.onBriefings?.(legacySnap.data().items);
-            }
-          });
-        }
-      });
-      activeUnsubscribes.push(unsub);
+      activeUnsubscribes.push(subscribeCollectionWithFallback(userId, 'briefings', callbacks.onBriefings));
     }
 
-    // Settings 실시간 리스너
     if (callbacks.onSettings) {
       const unsub = onSnapshot(doc(db, 'teachers', userId, 'settings', 'main'), (snap) => {
         if (snap.exists()) {

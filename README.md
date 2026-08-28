@@ -1,4 +1,4 @@
-# 🏫 티처스케줄 (T-Cal) — Svelte + Firebase + Netlify
+# 🏫 티처스케줄 (T-Cal) — Svelte + Firebase + Vercel
 
 선생님이 공문, 메신저 캡처, 텍스트를 던지면 AI가 일정과 To-Do를 역산하여 캘린더와 오늘 할 일에 자동 등록해 주는 **교사용 스마트 일정 인박스 웹 애플리케이션**입니다.
 
@@ -10,8 +10,8 @@
 - **Styling**: TailwindCSS / PostCSS
 - **Icons**: Lucide-Svelte
 - **Cloud Database**: Firebase Cloud Firestore (오프라인/로컬스토리지 자동 하이브리드 지원)
-- **Deployment**: Netlify (`netlify.toml` SPA 배포 설정 완비)
-- **AI Engine**: Google Gemini API (`gemini-3.5-flash` 및 모델 자동 폴백)
+- **Deployment**: Vercel (`api/` 폴더의 서버리스 함수로 AI API 키를 서버에서만 보관)
+- **AI Engine**: Google Gemini API + Upstage Document Parse (서버리스 프록시 경유, 모델 자동 폴백)
 
 ---
 
@@ -32,14 +32,20 @@ npm run dev
 
 ---
 
-## 🌐 Netlify 배포 가이드 (One-Click Deploy)
+## 🌐 Vercel 배포 가이드
 
-프로젝트 루트에 `netlify.toml`이 구성되어 있어 Netlify에 Git 리포지토리를 연결하면 별도 설정 없이 자동 배포됩니다.
+`api/gemini.ts`, `api/upstage.ts`가 Vercel 서버리스 함수(`@vercel/node`)로 작성되어 있어, Vercel에 Git 리포지토리를 연결하면 프론트엔드(Vite 빌드)와 API 프록시가 함께 자동 배포됩니다. Vercel은 Vite 프로젝트와 `api/` 폴더를 자동으로 인식하므로 별도 `vercel.json` 설정 없이도 동작합니다.
 
-### Netlify 빌드 설정
+### Vercel 설정
+- **Framework preset**: Vite (자동 감지)
 - **Build command**: `npm run build`
-- **Publish directory**: `dist`
-- **Redirects / SPA Routing**: `/* -> /index.html 200` (`netlify.toml`에 사전 구성됨)
+- **Output directory**: `dist`
+- **Environment Variables** (Vercel 대시보드 > Settings > Environment Variables에서 직접 입력):
+  - `GEMINI_API_KEY` — 서버에서만 사용, 브라우저에 노출되지 않음
+  - `UPSTAGE_API_KEY` — 서버에서만 사용, 브라우저에 노출되지 않음
+  - (선택) `VITE_FIREBASE_*` — Firebase 클라우드 동기화를 쓸 경우
+
+> 로컬에서 `/api/*` 프록시까지 함께 테스트하려면 `npm run dev`(내부적으로 `vercel dev` 실행)를 사용하세요. 프론트엔드만 빠르게 띄우려면 `npm run dev:vite`를 사용합니다(이 경우 AI 분석 기능은 동작하지 않습니다).
 
 ---
 
@@ -47,7 +53,7 @@ npm run dev
 
 1. [Firebase Console](https://console.firebase.google.com/)에서 새 프로젝트를 생성하고 **Cloud Firestore** 데이터베이스를 시작합니다.
 2. 웹 앱(`</>`)을 등록하고 제공되는 설정 정보를 확인합니다.
-3. 앱 상단 우측 **[설정]** 버튼 -> **[Firebase 연동]** 탭에서 `Project ID`, `API Key`, `App ID`를 입력하거나, 루트 디렉터리에 `.env` 파일을 생성하여 아래와 같이 설정합니다:
+3. 루트 디렉터리에 `.env` 파일을 생성(로컬용)하거나 Vercel 환경 변수(배포용)에 아래와 같이 설정합니다. Firebase 웹 설정값은 비밀 키가 아니라 공개 식별자이므로 `VITE_` 접두사로 브라우저에 노출되어도 안전합니다(접근 제어는 Firestore 보안 규칙에서 처리):
 
 ```env
 VITE_FIREBASE_API_KEY=your_firebase_api_key

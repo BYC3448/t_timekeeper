@@ -34,8 +34,6 @@
 
   function handleSave() {
     dispatch('save', {
-      geminiApiKey: settings?.geminiApiKey,
-      upstageApiKey: settings?.upstageApiKey,
       autoMaskPersonalInfo: autoMask,
       schoolName: schoolName.trim(),
       teacherName: teacherName.trim(),
