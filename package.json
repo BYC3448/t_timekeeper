@@ -8,7 +8,8 @@
     "dev:vite": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "postinstall": "node -e \"const fs=require('fs');const p='node_modules/.bin';try{fs.readdirSync(p).forEach(f=>{try{fs.chmodSync(p+'/'+f,0o755)}catch(e){}})}catch(e){}\""
   },
   "dependencies": {
     "canvas-confetti": "^1.9.3",
