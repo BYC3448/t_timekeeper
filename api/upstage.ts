@@ -21,6 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const formData = new FormData();
     formData.append('document', blob, fileName);
+    formData.append('model', 'document-parse');
 
     const response = await fetch('https://api.upstage.ai/v1/document-digitization', {
       method: 'POST',
@@ -30,7 +31,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(`Upstage 오류: ${err?.detail || `HTTP ${response.status}`}`);
+      const detail = err?.detail || err?.message || err?.error?.message || JSON.stringify(err);
+      throw new Error(`Upstage 오류 (HTTP ${response.status}): ${detail}`);
     }
 
     const data = await response.json();
