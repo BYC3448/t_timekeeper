@@ -21,6 +21,19 @@
   $: isHwp = fileNameLower.endsWith('.hwp') || fileNameLower.endsWith('.hwpx');
   $: isImage = data?.sourceImage && (data.sourceImage.startsWith('data:image/') || (!isPdf && !isHwp));
 
+  let hwpBlobUrl: string | null = null;
+
+  $: if (isOpen && isHwp && data?.sourceText) {
+    if (hwpBlobUrl) URL.revokeObjectURL(hwpBlobUrl);
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:'Malgun Gothic',sans-serif;padding:24px;font-size:13px;line-height:1.8;color:#1e293b;}p{margin:4px 0;}br{display:block;margin:2px 0;}</style></head><body>${data.sourceText}</body></html>`;
+    hwpBlobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  }
+
+  $: if (!isOpen && hwpBlobUrl) {
+    URL.revokeObjectURL(hwpBlobUrl);
+    hwpBlobUrl = null;
+  }
+
   function handleDownload() {
     if (!data) return;
     const targetUrl = data.sourceImage;
@@ -168,20 +181,21 @@
               {/if}
             </div>
 
-            <div class="border-t border-slate-200 pt-4 space-y-3">
-              <div class="flex items-center space-x-1.5 text-xs font-bold text-slate-700">
-                <FileText class="w-4 h-4 text-blue-600" />
-                <span>공문서 본문 및 핵심 지시사항</span>
+            {#if data.sourceText && hwpBlobUrl}
+              <div class="border-t border-slate-200 pt-4">
+                <iframe
+                  src={hwpBlobUrl}
+                  title={data.title}
+                  class="w-full rounded-xl border border-slate-200 bg-white"
+                  style="height: 55vh;"
+                  sandbox="allow-same-origin"
+                />
               </div>
-
-              <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 text-xs text-slate-800 leading-relaxed max-h-64 overflow-y-auto">
-                {#if data.sourceText}
-                  {@html data.sourceText}
-                {:else}
-                  <p class="whitespace-pre-wrap font-mono">[공문명]: {data.title}{'\n'}[마감일자]: {data.date || '계획서 명시일'}{'\n\n'}* 본 문서는 교직원 한글 파일로 첨부되어 등록되었습니다.{'\n'}* 세부 계획서 원본을 확인하시려면 우측 상단 [다운로드] 버튼을 누르시면 PC에 바로 저장됩니다.</p>
-                {/if}
+            {:else if !data.sourceText}
+              <div class="border-t border-slate-200 pt-4 text-xs text-slate-500 whitespace-pre-wrap font-mono">
+                [공문명]: {data.title}{'\n'}[마감일자]: {data.date || '계획서 명시일'}{'\n\n'}* 세부 계획서 원본을 확인하시려면 우측 상단 [다운로드] 버튼을 누르시면 PC에 바로 저장됩니다.
               </div>
-            </div>
+            {/if}
           </div>
         {:else if isPdf}
           <!-- 2. PDF 파일인 경우 -->
