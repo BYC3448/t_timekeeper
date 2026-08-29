@@ -40,6 +40,7 @@
       activeTab = 'calendar';
     } else {
       activeTab = 'today';
+      selectedDate = new Date();
     }
   }
 
