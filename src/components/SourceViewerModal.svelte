@@ -174,8 +174,12 @@
                 <span>공문서 본문 및 핵심 지시사항</span>
               </div>
 
-              <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 text-xs font-mono text-slate-800 leading-relaxed max-h-64 overflow-y-auto whitespace-pre-wrap">
-                {data.sourceText || `[공문명]: ${data.title}\n[마감일자]: ${data.date || '계획서 명시일'}\n\n* 본 문서는 교직원 한글 파일로 첨부되어 등록되었습니다.\n* 세부 계획서 원본을 확인하시려면 우측 상단 [다운로드] 버튼을 누르시면 PC에 바로 저장됩니다.`}
+              <div class="bg-slate-50 p-4 rounded-xl border border-slate-200/80 text-xs text-slate-800 leading-relaxed max-h-64 overflow-y-auto">
+                {#if data.sourceText}
+                  {@html data.sourceText}
+                {:else}
+                  <p class="whitespace-pre-wrap font-mono">[공문명]: {data.title}{'\n'}[마감일자]: {data.date || '계획서 명시일'}{'\n\n'}* 본 문서는 교직원 한글 파일로 첨부되어 등록되었습니다.{'\n'}* 세부 계획서 원본을 확인하시려면 우측 상단 [다운로드] 버튼을 누르시면 PC에 바로 저장됩니다.</p>
+                {/if}
               </div>
             </div>
           </div>
