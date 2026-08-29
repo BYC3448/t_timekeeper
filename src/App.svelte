@@ -215,7 +215,7 @@
         return;
       }
       currentSourceText = textContent;
-      currentSourceImage = undefined;
+      currentSourceImage = input.data; // 원본 HWP 바이너리 저장 (다운로드용)
     }
 
     try {
